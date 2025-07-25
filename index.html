@@ -2,101 +2,360 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Fetch Attachments by PATID</title>
+  <title>Prescription Pad - Hemas Health</title>
   <style>
     body {
       font-family: Arial, sans-serif;
+      margin: 0;
+    }
+    .custom-header {
+      background-color: #FFCC99;
+      padding: 10px;
+      text-align: center;
+      width: 100%;
+      border-bottom: 10px solid #e65c00;
+      position: relative;
+      box-sizing: border-box;
+      height: 70px;
+    }
+    .header-logo {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      max-height: 50px;
+    }
+    .pad-container {
       padding: 20px;
     }
-
-    input, button {
-      padding: 10px;
-      font-size: 16px;
-      margin-right: 8px;
-    }
-
-    a {
-      margin-bottom: 10px;
-      display: inline-block;
-      color: blue;
-      cursor: pointer;
-    }
-
-    iframe {
+    canvas {
+      border: 1px solid #ccc;
       width: 100%;
       height: 500px;
-      border: 1px solid #ccc;
-      margin-top: 10px;
+      background: white;
       display: none;
+      touch-action: none;
     }
+    canvas.active {
+      display: block;
+    }
+    .controls, .form-fields {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .controls button, .form-fields input {
+      margin: 5px;
+      padding: 10px 15px;
+      font-size: 14px;
+    }
+    .custom-footer {
+      background-color: #ffffff;
+      padding: 10px;
+      text-align: center;
+    }
+    .orange-line {
+      border-top: 2px solid #e65c00;
+      margin-top: 5px;
+    }
+
+    
   </style>
 </head>
 <body>
-  <h2>🔍 Search Patient Attachments</h2>
 
-  <label for="patid">Enter PAT ID:</label>
-  <input type="text" id="patid" placeholder="e.g., PAT123456" />
-  <button onclick="fetchAttachments()">Search</button>
+  <!-- Header -->
+  <div class="custom-header">
+    <h2>Hemas Health - Prescription Pad</h2>
+    <img src="https://hemashospitals.com/wp-content/uploads/2019/03/logo.png" alt="Company Logo" class="header-logo" />
+  </div>
 
-  <div id="output" style="margin-top: 20px;">Results will appear here...</div>
+  <div class="form-fields">
+    <input type="text" id="doctorName" placeholder="Doctor Name" />
+    <input type="text" id="patientNumber" placeholder="Patient Number" />
 
-  <iframe id="pdfViewer"></iframe>
+  </div>
+
+  <div class="pad-container">
+    <div class="controls">
+
+      <button onclick="clearCanvas()">Clear</button>
+      <button onclick="toggleEraser()" id="eraserToggle">Eraser: Off</button>
+      <button onclick="exportPDF()">Export PDF</button>
+      <button onclick="submitToSharePoint()">Save to EHR</button>
+<a href="ViewPrescriptions.html">
+  <button>Prescription History</button>
+</a>
+    </div>
+    <div id="canvasContainer"></div>
+    <div class="controls">
+      <button onclick="addPage()">Next Page</button>
+      <button onclick="previousPage()">Previous Page</button>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="custom-footer">
+    <div class="orange-line"></div>
+    <p>
+      <strong>Hemas Hospital (PVT) LTD.</strong> 389, Negombo Road, Wattala, Sri Lanka.<br />
+      [t] 011 7888 888 [f] 011 7888 765 [e] info@hemashospitals.com [w] www.hemashospitals.com
+    </p>
+  </div>
+
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <script>
-    async function fetchAttachments() {
-      const patid = document.getElementById("patid").value.trim();
-      const outputDiv = document.getElementById("output");
-      const iframe = document.getElementById("pdfViewer");
-      iframe.style.display = "none";
-      outputDiv.innerHTML = "⏳ Searching...";
+    const { jsPDF } = window.jspdf;
 
-      if (!patid) {
-        outputDiv.innerHTML = "❌ Please enter a valid PAT ID.";
-        return;
+    let isEraser = false;
+    let currentPage = 0;
+    const canvases = [];
+    const canvasContainer = document.getElementById("canvasContainer");
+
+    // Fixed canvas size (high resolution for PDF clarity)
+    const canvasWidth = 595;
+    const canvasHeight = 842;
+
+    // Logo base64 embedded small
+    const logoBase64 =
+      "data:image/png;base64,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";
+
+    function createCanvas() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 595;
+      canvas.height = 842;
+      canvas.style.width = "100%";
+      canvas.style.height = "500px";
+      canvas.className = "active";
+      
+
+      canvasContainer.appendChild(canvas);
+
+      const ctx = canvas.getContext("2d");
+      ctx.lineWidth = 0.01;
+      ctx.strokeStyle = "black";
+      ctx.fillStyle = "white";
+     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Drawing variables
+      let drawing = false;
+
+      function getPointerPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+          x: (e.clientX - rect.left) * (canvas.width / rect.width),
+          y: (e.clientY - rect.top) * (canvas.height / rect.height),
+        };
       }
 
-      try {
-        const response = await fetch("https://prod-30.southeastasia.logic.azure.com:443/workflows/6bc06d213f7741758434a4a4b810d52c/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=nmNPBbXp6hdyk0mR_SAUCunSGW9NnVXN2EEQmk4tA5c", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ "PATID": patid })
-        });
+      canvas.addEventListener("pointerdown", (e) => {
+        if (e.pointerType !== "pen") return;
+        drawing = true;
+        const pos = getPointerPos(e);
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+      });
 
-        if (!response.ok) {
-          throw new Error(`Server returned ${response.status}`);
-        }
+      canvas.addEventListener("pointermove", (e) => {
+        if (!drawing) return;
+        e.preventDefault();
+        const pos = getPointerPos(e);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.strokeStyle = isEraser ? "white" : "black";
+        ctx.lineWidth = isEraser ? 20 : 1;
+        ctx.lineCap = "round";
+        ctx.stroke();
+      });
 
-        const result = await response.json();
+      canvas.addEventListener("pointerup", (e) => {
+        e.preventDefault();
+        drawing = false;
+      });
 
-        if (!result.attachments || result.attachments.length === 0) {
-          outputDiv.innerHTML = "⚠️ No attachments found for this PAT ID.";
-          return;
-        }
+      canvas.addEventListener("pointerleave", (e) => {
+        drawing = false;
+      });
 
-        outputDiv.innerHTML = `<strong>✅ Found ${result.attachments.length} attachment(s):</strong><br/><br/>`;
+      return canvas;
+    }
 
-        result.attachments.forEach((att, index) => {
-          const fileName = att.FileName || `Attachment_${index + 1}.pdf`;
-          const base64 = att.ContentBytes;
+    function showCanvas(index) {
+      canvases.forEach((c, i) => {
+        c.classList.toggle("active", i === index);
+      });
+    }
 
-          const link = document.createElement("a");
-          link.innerText = `📄 View ${fileName}`;
-          link.onclick = () => {
-            iframe.src = `data:application/pdf;base64,${base64}`;
-            iframe.style.display = "block";
-          };
+    function addPage() {
+      canvases[currentPage].classList.remove("active");
+      const newCanvas = createCanvas();
+      canvases.push(newCanvas);
+      currentPage = canvases.length - 1;
+      showCanvas(currentPage);
+    }
 
-          outputDiv.appendChild(link);
-          outputDiv.appendChild(document.createElement("br"));
-        });
-
-      } catch (error) {
-        console.error("Error:", error);
-        outputDiv.innerHTML = "❌ Error fetching attachments. Please try again.";
+    function previousPage() {
+      if (currentPage > 0) {
+        canvases[currentPage].classList.remove("active");
+        currentPage--;
+        showCanvas(currentPage);
       }
     }
+
+    function clearCanvas() {
+      const ctx = canvases[currentPage].getContext("2d");
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, canvases[currentPage].width, canvases[currentPage].height);
+    }
+
+    function toggleEraser() {
+      isEraser = !isEraser;
+      document.getElementById("eraserToggle").innerText = "Eraser: " + (isEraser ? "On" : "Off");
+    }
+
+    async function exportPDF() {
+      const pdf = await generatePDF();
+      pdf.save("prescription.pdf");
+    }
+
+    async function submitToSharePoint() {
+
+      const pdf = await generatePDF();
+ document.getElementById("loadingOverlay").style.display = "flex"; // Show spinner
+      const pdfBase64 = pdf.output("datauristring").split(",")[1];
+
+      const payload = {
+        fileName: "prescription.pdf",
+        fileContentBase64: pdfBase64,
+        patientName: document.getElementById("patientNumber").value,
+        doctorName: document.getElementById("doctorName").value,
+        date: new Date().toISOString(),
+      };
+
+      const apiUrl = "https://prod-88.southeastasia.logic.azure.com:443/workflows/c091fe5d098342768d7d478516749214/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=TClF5yPta_6Mtt0VQYlZUQNZGlZEwiozGA8D3Cx54Nk";
+
+      try {
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate delay (remove in prod)
+        if (response.ok) {
+          alert("Submitted successfully!");
+        } else {
+          alert("Submission failed: " + response.status);
+        }
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+      finally {
+    document.getElementById("loadingOverlay").style.display = "none"; // Hide spinner
+  }
+    }
+    
+    async function generatePDF() {
+      return new Promise((resolve) => {
+        const pdf = new jsPDF({
+          orientation: "portrait",
+          unit: "pt",
+          format: "a4",
+        });
+
+        const margin = 10;
+        const logoWidth = 100;
+        const logoHeight = 50;
+
+        const img = new Image();
+        img.src = logoBase64;
+
+        img.onload = () => {
+          for (let i = 0; i < canvases.length; i++) {
+            if (i > 0) pdf.addPage();
+
+            // Header background
+            pdf.setFillColor(255, 204, 153);
+            pdf.rect(0, 0, canvasWidth, 60, "F");
+
+            // Logo
+            pdf.addImage(img, "PNG", canvasWidth - logoWidth - margin, 5, logoWidth, logoHeight);
+
+            // Header text
+            pdf.setFontSize(16);
+            pdf.setTextColor(0, 0, 0);
+            pdf.text("Hemas Health - Prescription Pad", margin, 30);
+
+            // Canvas image
+            const imgData = canvases[i].toDataURL("image/jpeg");
+            pdf.addImage(imgData, "jpeg", 0, 80, canvasWidth, canvasHeight - 150);
+
+            // Footer line
+            pdf.setDrawColor(230, 92, 0);
+            pdf.setLineWidth(2);
+            pdf.line(0, canvasHeight - 40, canvasWidth, canvasHeight - 40);
+
+            // Footer text
+          pdf.setFontSize(10);
+pdf.setFontSize(10);
+pdf.text(
+  [
+    "Hemas Hospital (PVT) LTD. 389, Negombo Road, Wattala, Sri Lanka.",
+    "[t] 011 7888 888 [f] 011 7888 765 [e] info@hemashospitals.com [w] www.hemashospitals.com"
+  ],
+  canvasWidth / 2,                 // X coordinate (middle of canvas)
+  canvasHeight - 20,              // Y coordinate (top line)
+  { align: "center" }              // Alignment option
+);
+
+
+          }
+          resolve(pdf);
+        };
+
+        img.onerror = () => {
+          alert("Failed to load logo image.");
+          resolve(pdf); // still resolve without logo
+        };
+      });
+    }
+
+    window.onload = () => {
+      const firstCanvas = createCanvas();
+      canvases.push(firstCanvas); 
+      showCanvas(0);
+    };
+
+  
   </script>
+
+  <div id="loadingOverlay" style="
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+">
+  <div class="spinner" style="
+    width: 60px;
+    height: 60px;
+    border: 6px solid #f3f3f3;
+    border-top: 6px solid #e65c00;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  "></div>
+</div>
+
+<style>
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+</style>
+
 </body>
 </html>
