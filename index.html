@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Doctor Login</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f2f2f2;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .login-box {
+      background-color: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0px 0px 15px rgba(0,0,0,0.2);
+      width: 320px;
+    }
+
+    .login-box h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .login-box input, .login-box button {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    .login-box button {
+      background-color: #0078d4;
+      color: white;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+    }
+
+    .login-box button:hover {
+      background-color: #005ea6;
+    }
+  </style>
+</head>
+<body>
+
+
+
+  <div class="login-box">
+<div id="alertBox" style="display: none; padding: 12px; margin: 10px 0; border-radius: 5px;"></div>
+    <h2>Doctor Login</h2>
+    <input type="text" id="username" placeholder="Username" required />
+    <input type="password" id="password" placeholder="Password" required />
+    <button onclick="login()">Login</button>
+  </div>
+
+  <script>
+    const flowUrl = "https://prod-91.southeastasia.logic.azure.com:443/workflows/fe409f1f9af24661a7cb8ccd77e29ec7/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=hezwQLlbDBS1pWf8SdQUbCNGNukNRHal1DkUfZMpwO8";
+
+    async function login() {
+      const username = document.getElementById("username").value.trim().toLowerCase(); // toLowerCase is optional
+      const password = document.getElementById("password").value.trim();
+
+      if (!username || !password) {
+        showAlert("Please fill in both fields.");
+        return;
+      }
+
+      console.log("Sending:", { username, password });
+
+      try {
+        const res = await fetch(flowUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password })
+        });
+
+        const result = await res.json();
+        console.log("Response:", result);
+
+        if (result.status === "success") {
+          localStorage.setItem("doctorLoggedIn", "true");
+          localStorage.setItem("doctorUsername", username);
+localStorage.setItem("doctorName", result.name || "Doctor"); 
+          window.location.href = "writepres.html"; // change this to your prescription page
+        } else {
+          showAlert("Invalid username or password.");
+        }
+
+      } catch (error) {
+        console.error("Login error:", error);
+        showAlert("Error contacting login server.");
+      }
+    }
+  </script>
+<script>
+  function showAlert(message, type = "info") {
+    const alertBox = document.getElementById("alertBox");
+    alertBox.style.display = "block";
+    alertBox.innerText = message;
+
+    if (type === "success") {
+      alertBox.style.backgroundColor = "#d4edda";
+      alertBox.style.color = "#155724";
+      alertBox.style.border = "1px solid #c3e6cb";
+    } else if (type === "error") {
+      alertBox.style.backgroundColor = "#f8d7da";
+      alertBox.style.color = "#721c24";
+      alertBox.style.border = "1px solid #f5c6cb";
+    } else {
+      alertBox.style.backgroundColor = "#cce5ff";
+      alertBox.style.color = "#004085";
+      alertBox.style.border = "1px solid #b8daff";
+    }
+
+    // Auto-hide after 4 seconds
+    setTimeout(() => {
+      alertBox.style.display = "none";
+    }, 4000);
+  }
+</script>
+<script>
+  // If user is already logged in, redirect to pad page immediately
+  if (localStorage.getItem("doctorLoggedIn") === "true") {
+    window.location.href = "writepres.html"; // or writepres.html — your prescription pad page
+  }
+</script>
+
+</body>
+</html>
