@@ -143,11 +143,19 @@
     }
     /* Toast */
     .toast {
-      border-radius: 0.5rem;
-      font-weight: 600;
-      font-size: 1rem;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-      user-select: none;
+       position: fixed;
+  top: 1rem;              /* distance from top */
+  left: 50%;              /* center horizontally */
+  transform: translateX(-50%);
+  z-index: 9999;          /* high to be on top */
+  pointer-events: none;   /* so clicks pass through container */
+  width: auto;
+  max-width: 90vw;        /* responsive max width */
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-direction: column;
+  align-items: center;
     }
     /* Loading Spinner overlay */
     #loadingOverlay {
@@ -169,7 +177,15 @@
   </style>
 </head>
 <body>
+<audio id="notificationSound" preload="auto">
+  <source src="1.mp3" type="audio/mpeg">
+</audio>
+
 <div class="container my-4">
+<div id="clickToEnable" class="alert alert-info text-center" style="display: none;">
+  🔔 Click anywhere to enable sound notifications
+</div>
+
   <h2>Pharmacy Workorder List</h2>
   <p id="lastUpdated" class="last-updated">Last updated: --</p>
 
@@ -323,6 +339,23 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
+
+let canPlaySound = false;
+
+document.addEventListener('click', () => {
+  canPlaySound = true;
+  const alertBanner = document.getElementById('clickToEnable');
+  if (alertBanner) alertBanner.style.display = 'none';
+}, { once: true });
+
+window.onload = () => {
+  if (!canPlaySound && document.getElementById('clickToEnable')) {
+    document.getElementById('clickToEnable').style.display = 'block';
+  }
+};
+
+
+
   const getItemsUrl = "https://prod-85.southeastasia.logic.azure.com:443/workflows/52c49cc8baed41e5af8e47ad79c76061/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Und9bIA8BdZnBaVIx8-z87n3ytcYh6FVGkFsVF6RzUI";
   const updateItemUrl = "https://prod-33.southeastasia.logic.azure.com:443/workflows/780298bb3d184582ac7193bf0ff29012/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=IdH9jAuK_ZQKQhnS71agVuEBkOrwn5A4fEqikHM3Bso";
   const sharePointBaseUrl = "https://hemascol.sharepoint.com";
@@ -698,15 +731,40 @@
   }
 
   // Load data & update UI
+let previousItemIDs = new Set();
+
 async function loadData(showLoadingAnimation = true) {
   if (showLoadingAnimation) showLoading(true); // Only show spinner when true
-  allItems = await fetchItems();
+  const newItems = await fetchItems();
   if (showLoadingAnimation) showLoading(false);
 
-  updateDashboardByDateFilter();
+  // Check for new items by comparing IDs
+  const newIDs = new Set(newItems.map(item => item.ID));
+  let isNewItem = false;
+  for (let id of newIDs) {
+    if (!previousItemIDs.has(id)) {
+      isNewItem = true;
+      break;
+    }
+  }
+
+ if (isNewItem && previousItemIDs.size > 0) {
+  if (canPlaySound) {
+    document.getElementById("notificationSound").play();
+  }
+  showToast("New workorder received!", false);
+}
+
+
+  previousItemIDs = newIDs;
+  allItems = newItems;
+
+  updateDashboardByDateFilter?.();
+
   if (document.getElementById('workorderTab').classList.contains('active')) {
     applyFiltersAndRender();
   }
+
   document.getElementById("lastUpdated").textContent = "Last updated: " + new Date().toLocaleString();
 }
 
@@ -753,6 +811,8 @@ setInterval(() => {
 function showLoading(show) {
   document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
 }
+
+
 
 </script>
 </body>
